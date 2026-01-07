@@ -82,7 +82,7 @@ graph TB
 - **Deployment**: S3 for static hosting, CloudFront for CDN
 - **API Layer**: AWS API Gateway with Lambda integration
 - **Backend**: Python 3.11 on AWS Lambda with boto3 for AWS service integration
-- **Authentication**: AWS Cognito for user management and JWT tokens
+- **Authentication**: AWS Cognito for user management and JWT tokens (planned - see docs/AUTHENTICATION_IMPLEMENTATION.md)
 - **Database**: Aurora Serverless v2 (PostgreSQL) for relational data, DynamoDB for GPS/time-series data
 - **Caching**: DynamoDB with TTL for GPS data management
 - **Infrastructure**: AWS SAM (Serverless Application Model) for backend deployment
