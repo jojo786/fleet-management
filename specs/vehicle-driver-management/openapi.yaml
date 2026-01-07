@@ -1,0 +1,1685 @@
+openapi: 3.0.3
+info:
+  title: FLEET API - Fleet Location, Efficiency, and Tracking Technology
+  description: |
+    Comprehensive vehicle and driver management system for Uber rental operations.
+    
+    The FLEET API manages:
+    - Vehicle fleet operations and maintenance tracking
+    - Driver onboarding and performance monitoring
+    - Financial settlements (R5000 minimum weekly payment model)
+    - GPS tracking via Netstar integration
+    - Insurance management
+    - Service cost analysis and alerts
+    
+    **Authentication**: All endpoints (except /health) require AWS Cognito JWT token in Authorization header.
+    
+    **Base URL**: https://{api-gateway-id}.execute-api.eu-west-1.amazonaws.com/{environment}/
+    
+  version: 1.0.0
+  contact:
+    name: FLEET API Support
+    email: support@fleet-system.com
+  license:
+    name: Proprietary
+    
+servers:
+  - url: https://{apiId}.execute-api.eu-west-1.amazonaws.com/{environment}
+    description: AWS API Gateway endpoint
+    variables:
+      apiId:
+        default: your-api-id
+        description: API Gateway ID from CloudFormation output
+      environment:
+        default: dev
+        enum:
+          - dev
+          - prod
+        description: Deployment environment
+
+tags:
+  - name: Health
+    description: System health check endpoints
+  - name: Vehicles
+    description: Vehicle fleet management operations
+  - name: Service Records
+    description: Vehicle maintenance and service tracking
+  - name: Drivers
+    description: Driver management and onboarding
+  - name: Assignments
+    description: Driver-vehicle assignment operations
+  - name: Performance
+    description: Driver performance tracking and monitoring
+  - name: Financial
+    description: Financial settlement and payment tracking
+  - name: Cost Analysis
+    description: Service cost analysis and reporting
+  - name: GPS Tracking
+    description: Vehicle location and behavior monitoring
+  - name: Insurance
+    description: Insurance policy and claims management
+  - name: Alerts
+    description: System alerts and notifications
+  - name: Reports
+    description: Analytics and reporting
+
+security:
+  - CognitoAuthorizer: []
+
+paths:
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Health check endpoint
+      description: Returns system health status. No authentication required.
+      operationId: healthCheck
+      security: []
+      responses:
+        '200':
+          description: System is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '503':
+          description: System is unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /vehicles:
+    get:
+      tags:
+        - Vehicles
+      summary: List all vehicles
+      description: Retrieve a list of all vehicles in the fleet with optional filtering
+      operationId: listVehicles
+      parameters:
+        - name: status
+          in: query
+          description: Filter by vehicle status
+          schema:
+            type: string
+            enum: [active, in_service, out_of_order, retired]
+        - name: driver_id
+          in: query
+          description: Filter by assigned driver ID
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: Maximum number of results to return
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 100
+        - name: offset
+          in: query
+          description: Number of results to skip for pagination
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+      responses:
+        '200':
+          description: List of vehicles
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  vehicles:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Vehicle'
+                  total:
+                    type: integer
+                    description: Total number of vehicles matching filters
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    
+    post:
+      tags:
+        - Vehicles
+      summary: Create a new vehicle
+      description: Register a new vehicle in the fleet
+      operationId: createVehicle
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VehicleCreate'
+      responses:
+        '201':
+          description: Vehicle created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Vehicle'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /vehicles/{id}:
+    get:
+      tags:
+        - Vehicles
+      summary: Get vehicle by ID
+      description: Retrieve detailed information about a specific vehicle
+      operationId: getVehicle
+      parameters:
+        - $ref: '#/components/parameters/VehicleId'
+      responses:
+        '200':
+          description: Vehicle details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Vehicle'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    
+    put:
+      tags:
+        - Vehicles
+      summary: Update vehicle
+      description: Update vehicle information
+      operationId: updateVehicle
+      parameters:
+        - $ref: '#/components/parameters/VehicleId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VehicleUpdate'
+      responses:
+        '200':
+          description: Vehicle updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Vehicle'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    
+    delete:
+      tags:
+        - Vehicles
+      summary: Delete vehicle
+      description: Remove a vehicle from the fleet (admin only)
+      operationId: deleteVehicle
+      parameters:
+        - $ref: '#/components/parameters/VehicleId'
+      responses:
+        '204':
+          description: Vehicle deleted successfully
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /vehicles/{id}/service-records:
+    get:
+      tags:
+        - Service Records
+      summary: Get vehicle service history
+      description: Retrieve complete service and maintenance history for a vehicle
+      operationId: getServiceHistory
+      parameters:
+        - $ref: '#/components/parameters/VehicleId'
+        - name: service_type
+          in: query
+          description: Filter by service type
+          schema:
+            $ref: '#/components/schemas/MaintenanceType'
+        - name: start_date
+          in: query
+          description: Filter records from this date (ISO 8601)
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          description: Filter records until this date (ISO 8601)
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Service history records
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  service_records:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ServiceRecord'
+                  total_cost:
+                    type: number
+                    format: float
+                    description: Total cost of all service records
+                  total_records:
+                    type: integer
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    
+    post:
+      tags:
+        - Service Records
+      summary: Add service record
+      description: Record a new service or maintenance event for a vehicle
+      operationId: addServiceRecord
+      parameters:
+        - $ref: '#/components/parameters/VehicleId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ServiceRecordCreate'
+      responses:
+        '201':
+          description: Service record created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceRecord'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /maintenance-alerts:
+    get:
+      tags:
+        - Alerts
+      summary: Get maintenance alerts
+      description: Retrieve pending maintenance alerts for all vehicles
+      operationId: getMaintenanceAlerts
+      parameters:
+        - name: vehicle_id
+          in: query
+          description: Filter by specific vehicle
+          schema:
+            type: string
+        - name: priority
+          in: query
+          description: Filter by alert priority
+          schema:
+            type: string
+            enum: [low, medium, high, critical]
+      responses:
+        '200':
+          description: List of maintenance alerts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  alerts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MaintenanceAlert'
+                  total:
+                    type: integer
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /cost-analysis:
+    get:
+      tags:
+        - Cost Analysis
+      summary: Get cost analysis
+      description: Retrieve detailed cost analysis for vehicles and maintenance
+      operationId: getCostAnalysis
+      parameters:
+        - name: vehicle_id
+          in: query
+          description: Filter by specific vehicle
+          schema:
+            type: string
+        - name: start_date
+          in: query
+          description: Analysis start date (ISO 8601)
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          description: Analysis end date (ISO 8601)
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Cost analysis data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CostAnalysis'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /fleet-cost-comparison:
+    get:
+      tags:
+        - Cost Analysis
+      summary: Get fleet cost comparison
+      description: Compare service costs across all vehicles in the fleet
+      operationId: getFleetCostComparison
+      responses:
+        '200':
+          description: Fleet cost comparison data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FleetCostComparison'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /high-cost-alerts:
+    get:
+      tags:
+        - Alerts
+      summary: Get high cost alerts
+      description: Retrieve alerts for vehicles with costs exceeding fleet average by 20%
+      operationId: getHighCostAlerts
+      responses:
+        '200':
+          description: List of high cost alerts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  alerts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/HighCostAlert'
+                  total:
+                    type: integer
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /drivers:
+    get:
+      tags:
+        - Drivers
+      summary: List all drivers
+      description: Retrieve a list of all drivers with optional filtering
+      operationId: listDrivers
+      parameters:
+        - name: status
+          in: query
+          description: Filter by driver status
+          schema:
+            type: string
+            enum: [active, inactive, suspended, terminated]
+        - name: vehicle_id
+          in: query
+          description: Filter by assigned vehicle ID
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: Maximum number of results to return
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 100
+        - name: offset
+          in: query
+          description: Number of results to skip for pagination
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+      responses:
+        '200':
+          description: List of drivers
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  drivers:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Driver'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    
+    post:
+      tags:
+        - Drivers
+      summary: Create a new driver
+      description: Onboard a new driver with validation of license and documentation
+      operationId: createDriver
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DriverCreate'
+      responses:
+        '201':
+          description: Driver created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Driver'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /drivers/{id}:
+    get:
+      tags:
+        - Drivers
+      summary: Get driver by ID
+      description: Retrieve detailed information about a specific driver
+      operationId: getDriver
+      parameters:
+        - $ref: '#/components/parameters/DriverId'
+      responses:
+        '200':
+          description: Driver details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Driver'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    
+    put:
+      tags:
+        - Drivers
+      summary: Update driver
+      description: Update driver information
+      operationId: updateDriver
+      parameters:
+        - $ref: '#/components/parameters/DriverId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DriverUpdate'
+      responses:
+        '200':
+          description: Driver updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Driver'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    
+    delete:
+      tags:
+        - Drivers
+      summary: Delete driver
+      description: Remove a driver from the system (admin only)
+      operationId: deleteDriver
+      parameters:
+        - $ref: '#/components/parameters/DriverId'
+      responses:
+        '204':
+          description: Driver deleted successfully
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /drivers/{id}/assignments:
+    get:
+      tags:
+        - Assignments
+      summary: Get driver assignments
+      description: Retrieve vehicle assignment history for a driver
+      operationId: getDriverAssignments
+      parameters:
+        - $ref: '#/components/parameters/DriverId'
+        - name: active_only
+          in: query
+          description: Return only active assignments
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Driver assignment history
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  assignments:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DriverAssignment'
+                  total:
+                    type: integer
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    
+    post:
+      tags:
+        - Assignments
+      summary: Assign vehicle to driver
+      description: Create a new vehicle assignment for a driver
+      operationId: assignVehicle
+      parameters:
+        - $ref: '#/components/parameters/DriverId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssignmentCreate'
+      responses:
+        '201':
+          description: Vehicle assigned successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DriverAssignment'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          description: Conflict - Vehicle already assigned or driver already has active assignment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /drivers/{id}/performance:
+    get:
+      tags:
+        - Performance
+      summary: Get driver performance
+      description: Retrieve performance metrics and history for a driver
+      operationId: getDriverPerformance
+      parameters:
+        - $ref: '#/components/parameters/DriverId'
+        - name: start_date
+          in: query
+          description: Performance data from this date (ISO 8601)
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          description: Performance data until this date (ISO 8601)
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Driver performance data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DriverPerformance'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    
+    post:
+      tags:
+        - Performance
+      summary: Record driver performance
+      description: Record weekly performance data for a driver
+      operationId: recordPerformance
+      parameters:
+        - $ref: '#/components/parameters/DriverId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PerformanceRecordCreate'
+      responses:
+        '201':
+          description: Performance record created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PerformanceRecord'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+
+components:
+  securitySchemes:
+    CognitoAuthorizer:
+      type: apiKey
+      name: Authorization
+      in: header
+      description: AWS Cognito JWT token. Format - "Bearer {token}"
+      x-amazon-apigateway-authtype: cognito_user_pools
+      x-amazon-apigateway-authorizer:
+        type: cognito_user_pools
+        providerARNs:
+          - arn:aws:cognito-idp:eu-west-1:{account-id}:userpool/{user-pool-id}
+
+  parameters:
+    VehicleId:
+      name: id
+      in: path
+      required: true
+      description: Unique vehicle identifier (UUID)
+      schema:
+        type: string
+        format: uuid
+    
+    DriverId:
+      name: id
+      in: path
+      required: true
+      description: Unique driver identifier (UUID)
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    BadRequestError:
+      description: Bad request - Invalid input data
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    
+    UnauthorizedError:
+      description: Unauthorized - Missing or invalid authentication token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    
+    ForbiddenError:
+      description: Forbidden - Insufficient permissions for this operation
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    
+    NotFoundError:
+      description: Not found - Resource does not exist
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+
+  schemas:
+    # Common Schemas
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          description: Error code or type
+        message:
+          type: string
+          description: Human-readable error message
+        details:
+          type: object
+          description: Additional error details
+          additionalProperties: true
+        timestamp:
+          type: string
+          format: date-time
+          description: Error timestamp
+    
+    HealthResponse:
+      type: object
+      required:
+        - status
+        - timestamp
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+        timestamp:
+          type: string
+          format: date-time
+        version:
+          type: string
+          example: "1.0.0"
+        environment:
+          type: string
+          enum: [dev, prod]
+        database:
+          type: object
+          properties:
+            status:
+              type: string
+              enum: [connected, disconnected]
+            latency_ms:
+              type: number
+              format: float
+    
+    # Vehicle Schemas
+    VehicleStatus:
+      type: string
+      enum:
+        - active
+        - in_service
+        - out_of_order
+        - retired
+      description: Current operational status of the vehicle
+    
+    Vehicle:
+      type: object
+      required:
+        - id
+        - make
+        - model
+        - year
+        - registration
+        - status
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique vehicle identifier
+        make:
+          type: string
+          description: Vehicle manufacturer
+          example: "Toyota"
+        model:
+          type: string
+          description: Vehicle model
+          example: "Camry"
+        year:
+          type: integer
+          minimum: 1900
+          maximum: 2100
+          description: Manufacturing year
+          example: 2022
+        registration:
+          type: string
+          description: Vehicle registration/license plate number
+          example: "ABC123GP"
+        vin:
+          type: string
+          description: Vehicle Identification Number
+          example: "1HGBH41JXMN109186"
+        status:
+          $ref: '#/components/schemas/VehicleStatus'
+        current_driver_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: ID of currently assigned driver
+        current_mileage:
+          type: integer
+          minimum: 0
+          description: Current odometer reading in kilometers
+          example: 45000
+        created_at:
+          type: string
+          format: date-time
+          description: Record creation timestamp
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update timestamp
+    
+    VehicleCreate:
+      type: object
+      required:
+        - make
+        - model
+        - year
+        - registration
+      properties:
+        make:
+          type: string
+          minLength: 1
+          maxLength: 50
+        model:
+          type: string
+          minLength: 1
+          maxLength: 50
+        year:
+          type: integer
+          minimum: 1900
+          maximum: 2100
+        registration:
+          type: string
+          minLength: 1
+          maxLength: 20
+        vin:
+          type: string
+          minLength: 17
+          maxLength: 17
+        current_mileage:
+          type: integer
+          minimum: 0
+    
+    VehicleUpdate:
+      type: object
+      properties:
+        make:
+          type: string
+          minLength: 1
+          maxLength: 50
+        model:
+          type: string
+          minLength: 1
+          maxLength: 50
+        year:
+          type: integer
+          minimum: 1900
+          maximum: 2100
+        registration:
+          type: string
+          minLength: 1
+          maxLength: 20
+        vin:
+          type: string
+          minLength: 17
+          maxLength: 17
+        status:
+          $ref: '#/components/schemas/VehicleStatus'
+        current_mileage:
+          type: integer
+          minimum: 0
+    
+    # Service Record Schemas
+    MaintenanceType:
+      type: string
+      enum:
+        - oil_change
+        - brake_service
+        - tire_replacement
+        - engine_repair
+        - transmission_service
+        - accident_repair
+        - general_maintenance
+        - electrical_repair
+        - body_work
+        - inspection
+      description: Type of maintenance or service performed
+    
+    ServiceRecord:
+      type: object
+      required:
+        - id
+        - vehicle_id
+        - service_type
+        - description
+        - cost
+        - service_date
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        vehicle_id:
+          type: string
+          format: uuid
+        driver_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Driver assigned at time of service
+        service_type:
+          $ref: '#/components/schemas/MaintenanceType'
+        description:
+          type: string
+          description: Detailed description of service performed
+        cost:
+          type: number
+          format: float
+          minimum: 0
+          description: Service cost in ZAR
+          example: 1500.50
+        service_date:
+          type: string
+          format: date
+          description: Date service was performed
+        mileage:
+          type: integer
+          minimum: 0
+          description: Vehicle mileage at time of service
+        service_provider:
+          type: string
+          description: Name of service provider/mechanic
+        is_warranty:
+          type: boolean
+          default: false
+          description: Whether service was covered by warranty
+        next_service_due:
+          type: string
+          format: date
+          nullable: true
+          description: Date when next service is due
+        created_at:
+          type: string
+          format: date-time
+    
+    ServiceRecordCreate:
+      type: object
+      required:
+        - service_type
+        - description
+        - cost
+        - service_date
+      properties:
+        driver_id:
+          type: string
+          format: uuid
+        service_type:
+          $ref: '#/components/schemas/MaintenanceType'
+        description:
+          type: string
+          minLength: 1
+          maxLength: 1000
+        cost:
+          type: number
+          format: float
+          minimum: 0
+        service_date:
+          type: string
+          format: date
+        mileage:
+          type: integer
+          minimum: 0
+        service_provider:
+          type: string
+          maxLength: 200
+        is_warranty:
+          type: boolean
+          default: false
+        next_service_due:
+          type: string
+          format: date
+    
+    # Alert Schemas
+    MaintenanceAlert:
+      type: object
+      required:
+        - id
+        - vehicle_id
+        - alert_type
+        - priority
+        - message
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        vehicle_id:
+          type: string
+          format: uuid
+        vehicle_registration:
+          type: string
+        alert_type:
+          type: string
+          enum: [mileage_due, time_due, overdue]
+        priority:
+          type: string
+          enum: [low, medium, high, critical]
+        message:
+          type: string
+          description: Human-readable alert message
+        due_date:
+          type: string
+          format: date
+          nullable: true
+        current_mileage:
+          type: integer
+        service_due_mileage:
+          type: integer
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+    
+    HighCostAlert:
+      type: object
+      required:
+        - id
+        - vehicle_id
+        - alert_type
+        - message
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        vehicle_id:
+          type: string
+          format: uuid
+        vehicle_registration:
+          type: string
+        alert_type:
+          type: string
+          enum: [high_maintenance_cost, recurring_issue, accident_repair]
+        message:
+          type: string
+        vehicle_cost:
+          type: number
+          format: float
+          description: Total cost for this vehicle
+        fleet_average:
+          type: number
+          format: float
+          description: Fleet average cost
+        cost_difference_percentage:
+          type: number
+          format: float
+          description: Percentage above fleet average
+        created_at:
+          type: string
+          format: date-time
+    
+    # Cost Analysis Schemas
+    CostAnalysis:
+      type: object
+      properties:
+        vehicle_id:
+          type: string
+          format: uuid
+        vehicle_registration:
+          type: string
+        period_start:
+          type: string
+          format: date
+        period_end:
+          type: string
+          format: date
+        total_service_cost:
+          type: number
+          format: float
+          description: Total maintenance and repair costs
+        total_insurance_cost:
+          type: number
+          format: float
+          description: Insurance premiums (R500/month)
+        total_gps_cost:
+          type: number
+          format: float
+          description: Netstar GPS costs (R200/month)
+        total_cost:
+          type: number
+          format: float
+          description: Total cost of ownership
+        cost_by_type:
+          type: object
+          description: Breakdown of costs by maintenance type
+          additionalProperties:
+            type: number
+            format: float
+        service_count:
+          type: integer
+          description: Number of service events
+        average_cost_per_service:
+          type: number
+          format: float
+    
+    FleetCostComparison:
+      type: object
+      properties:
+        fleet_average_monthly_cost:
+          type: number
+          format: float
+        fleet_total_cost:
+          type: number
+          format: float
+        vehicle_count:
+          type: integer
+        vehicles:
+          type: array
+          items:
+            type: object
+            properties:
+              vehicle_id:
+                type: string
+                format: uuid
+              registration:
+                type: string
+              total_cost:
+                type: number
+                format: float
+              monthly_average:
+                type: number
+                format: float
+              cost_vs_fleet_average:
+                type: number
+                format: float
+                description: Percentage difference from fleet average
+              is_high_cost:
+                type: boolean
+                description: True if exceeds fleet average by 20%+
+    
+    # Driver Schemas
+    DriverStatus:
+      type: string
+      enum:
+        - active
+        - inactive
+        - suspended
+        - terminated
+    
+    Driver:
+      type: object
+      required:
+        - id
+        - first_name
+        - last_name
+        - email
+        - phone
+        - license_number
+        - license_expiry
+        - id_number
+        - status
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        first_name:
+          type: string
+          example: "John"
+        last_name:
+          type: string
+          example: "Doe"
+        email:
+          type: string
+          format: email
+          example: "john.doe@example.com"
+        phone:
+          type: string
+          example: "+27821234567"
+        license_number:
+          type: string
+          description: Driver's license number
+        license_expiry:
+          type: string
+          format: date
+          description: License expiration date
+        id_number:
+          type: string
+          description: South African ID number
+        address:
+          type: object
+          properties:
+            street:
+              type: string
+            city:
+              type: string
+            province:
+              type: string
+            postal_code:
+              type: string
+            country:
+              type: string
+              default: "South Africa"
+        status:
+          $ref: '#/components/schemas/DriverStatus'
+        current_vehicle_id:
+          type: string
+          format: uuid
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    
+    DriverCreate:
+      type: object
+      required:
+        - first_name
+        - last_name
+        - email
+        - phone
+        - license_number
+        - license_expiry
+        - id_number
+      properties:
+        first_name:
+          type: string
+          minLength: 1
+          maxLength: 50
+        last_name:
+          type: string
+          minLength: 1
+          maxLength: 50
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+          pattern: '^\+?[0-9]{10,15}$'
+        license_number:
+          type: string
+          minLength: 1
+          maxLength: 50
+        license_expiry:
+          type: string
+          format: date
+        id_number:
+          type: string
+          minLength: 13
+          maxLength: 13
+          description: South African ID number (13 digits)
+        address:
+          type: object
+          properties:
+            street:
+              type: string
+            city:
+              type: string
+            province:
+              type: string
+            postal_code:
+              type: string
+            country:
+              type: string
+    
+    DriverUpdate:
+      type: object
+      properties:
+        first_name:
+          type: string
+          minLength: 1
+          maxLength: 50
+        last_name:
+          type: string
+          minLength: 1
+          maxLength: 50
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+          pattern: '^\+?[0-9]{10,15}$'
+        license_number:
+          type: string
+          minLength: 1
+          maxLength: 50
+        license_expiry:
+          type: string
+          format: date
+        address:
+          type: object
+          properties:
+            street:
+              type: string
+            city:
+              type: string
+            province:
+              type: string
+            postal_code:
+              type: string
+            country:
+              type: string
+        status:
+          $ref: '#/components/schemas/DriverStatus'
+    
+    # Assignment Schemas
+    DriverAssignment:
+      type: object
+      required:
+        - id
+        - driver_id
+        - vehicle_id
+        - start_date
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        driver_id:
+          type: string
+          format: uuid
+        vehicle_id:
+          type: string
+          format: uuid
+        vehicle_registration:
+          type: string
+        start_date:
+          type: string
+          format: date
+          description: Assignment start date
+        end_date:
+          type: string
+          format: date
+          nullable: true
+          description: Assignment end date (null if active)
+        is_active:
+          type: boolean
+          description: Whether this is the current active assignment
+        created_at:
+          type: string
+          format: date-time
+    
+    AssignmentCreate:
+      type: object
+      required:
+        - vehicle_id
+        - start_date
+      properties:
+        vehicle_id:
+          type: string
+          format: uuid
+        start_date:
+          type: string
+          format: date
+    
+    # Performance Schemas
+    PerformanceRecord:
+      type: object
+      required:
+        - id
+        - driver_id
+        - week_start_date
+        - week_end_date
+        - card_earnings
+        - cash_trip_value
+        - total_earnings
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        driver_id:
+          type: string
+          format: uuid
+        vehicle_id:
+          type: string
+          format: uuid
+          nullable: true
+        week_start_date:
+          type: string
+          format: date
+        week_end_date:
+          type: string
+          format: date
+        card_earnings:
+          type: number
+          format: float
+          minimum: 0
+          description: Uber card payments in ZAR
+        cash_trip_value:
+          type: number
+          format: float
+          minimum: 0
+          description: Cash trip values in ZAR
+        total_earnings:
+          type: number
+          format: float
+          minimum: 0
+          description: Combined card + cash earnings
+        minimum_deduction:
+          type: number
+          format: float
+          default: 5000
+          description: Minimum weekly payment (R5000)
+        driver_payout:
+          type: number
+          format: float
+          description: Amount paid to driver (card earnings - R5000)
+        shortfall:
+          type: number
+          format: float
+          default: 0
+          description: Amount driver owes if total < R5000
+        total_trips:
+          type: integer
+          minimum: 0
+        card_trips:
+          type: integer
+          minimum: 0
+        cash_trips:
+          type: integer
+          minimum: 0
+        cash_trip_percentage:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 100
+          description: Percentage of trips that were cash
+        meets_target:
+          type: boolean
+          description: Whether total earnings >= R5000
+        has_excessive_cash:
+          type: boolean
+          description: Whether cash trips > 70% of total
+        created_at:
+          type: string
+          format: date-time
+    
+    PerformanceRecordCreate:
+      type: object
+      required:
+        - week_start_date
+        - week_end_date
+        - card_earnings
+        - cash_trip_value
+        - total_trips
+        - card_trips
+        - cash_trips
+      properties:
+        vehicle_id:
+          type: string
+          format: uuid
+        week_start_date:
+          type: string
+          format: date
+        week_end_date:
+          type: string
+          format: date
+        card_earnings:
+          type: number
+          format: float
+          minimum: 0
+        cash_trip_value:
+          type: number
+          format: float
+          minimum: 0
+        total_trips:
+          type: integer
+          minimum: 0
+        card_trips:
+          type: integer
+          minimum: 0
+        cash_trips:
+          type: integer
+          minimum: 0
+    
+    DriverPerformance:
+      type: object
+      properties:
+        driver_id:
+          type: string
+          format: uuid
+        driver_name:
+          type: string
+        current_vehicle:
+          type: string
+          description: Current vehicle registration
+        performance_summary:
+          type: object
+          properties:
+            total_weeks:
+              type: integer
+              description: Total weeks with performance data
+            weeks_meeting_target:
+              type: integer
+              description: Number of weeks meeting R5000 target
+            weeks_below_target:
+              type: integer
+              description: Number of weeks below R5000 target
+            target_achievement_rate:
+              type: number
+              format: float
+              minimum: 0
+              maximum: 100
+              description: Percentage of weeks meeting target
+            consecutive_weeks_meeting_target:
+              type: integer
+              description: Current streak of weeks meeting target
+            consecutive_weeks_below_target:
+              type: integer
+              description: Current streak of weeks below target
+            average_weekly_earnings:
+              type: number
+              format: float
+              description: Average total earnings per week
+            average_card_earnings:
+              type: number
+              format: float
+            average_cash_earnings:
+              type: number
+              format: float
+            average_cash_percentage:
+              type: number
+              format: float
+              description: Average percentage of cash trips
+            weeks_with_excessive_cash:
+              type: integer
+              description: Number of weeks with >70% cash trips
+        recent_performance:
+          type: array
+          description: Recent weekly performance records
+          items:
+            $ref: '#/components/schemas/PerformanceRecord'
+        alerts:
+          type: array
+          description: Active performance alerts
+          items:
+            type: object
+            properties:
+              alert_type:
+                type: string
+                enum: [below_target, excessive_cash, consecutive_failures]
+              message:
+                type: string
+              severity:
+                type: string
+                enum: [low, medium, high, critical]
