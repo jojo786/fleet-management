@@ -81,8 +81,9 @@ graph TB
 - **Frontend**: Vanilla JavaScript (ES6+) with class-based architecture, HTML5, CSS3
 - **Deployment**: S3 for static hosting, CloudFront for CDN
 - **API Layer**: AWS API Gateway with Lambda integration
+- **Authentication**: AWS Cognito User Pools with JWT tokens (see docs/AUTHENTICATION_IMPLEMENTATION.md)
+- **Authorization**: API Gateway Cognito Authorizer with role-based access control
 - **Backend**: Python 3.11 on AWS Lambda with boto3 for AWS service integration
-- **Authentication**: AWS Cognito for user management and JWT tokens (planned - see docs/AUTHENTICATION_IMPLEMENTATION.md)
 - **Database**: Aurora Serverless v2 (PostgreSQL) for relational data, DynamoDB for GPS/time-series data
 - **Caching**: DynamoDB with TTL for GPS data management
 - **Infrastructure**: AWS SAM (Serverless Application Model) for backend deployment
@@ -690,6 +691,110 @@ Property 36: **Audit Logging**
 Property 37: **Automated Backup**
 *For any* day, an automated backup should be created containing all system data
 **Validates: Requirements 9.4**
+
+## Authentication and Authorization
+
+### AWS Cognito Integration
+
+FLEET uses AWS Cognito User Pools for secure authentication and authorization:
+
+**User Pool Configuration:**
+- Email-based authentication
+- Strong password policy (8+ chars, mixed case, numbers, symbols)
+- JWT tokens for API authorization
+- Token validity: 1 hour (access/ID tokens), 30 days (refresh tokens)
+- Automatic token refresh on expiration
+
+**User Roles:**
+- **Admin** - Full system access, user management, all CRUD operations
+- **Operator** - Manage vehicles, drivers, view reports, no user management
+- **Driver** - View assigned vehicle, submit service records, view own performance
+- **Viewer** - Read-only access to vehicles and reports
+
+### API Gateway Authorization
+
+All API endpoints (except `/health`) are protected by AWS Cognito Authorizer:
+
+```yaml
+Auth:
+  Authorizer: FleetApiAuthorizer
+  AuthorizationScopes:
+    - fleet/read
+    - fleet/write
+```
+
+**Authorization Flow:**
+1. User authenticates with Cognito (email + password)
+2. Cognito returns JWT tokens (ID token, access token, refresh token)
+3. Frontend stores tokens in localStorage
+4. Frontend includes ID token in Authorization header for API requests
+5. API Gateway validates token with Cognito
+6. Lambda receives validated user claims in event context
+7. Lambda enforces role-based access control
+
+### Frontend Authentication
+
+**Authentication Service (`frontend/auth.js`):**
+- Sign up new users
+- Sign in with email/password
+- Sign out and clear tokens
+- Automatic token refresh
+- Check authentication status
+- Store tokens securely in localStorage
+
+**Protected API Requests:**
+```javascript
+async apiRequest(endpoint, options = {}) {
+    const token = this.auth.getIdToken();
+    const headers = {
+        'Authorization': `Bearer ${token}`,
+        ...options.headers
+    };
+    // Handle 401 and auto-refresh token
+}
+```
+
+### Backend Authorization
+
+**Lambda Token Validation:**
+```python
+def lambda_handler(event, context):
+    # Get validated user claims from API Gateway
+    claims = event['requestContext']['authorizer']['claims']
+    user_email = claims['email']
+    user_role = claims.get('custom:role', 'viewer')
+    
+    # Enforce role-based access control
+    if user_role not in ['admin', 'operator'] and event['httpMethod'] == 'DELETE':
+        return {'statusCode': 403, 'body': 'Insufficient permissions'}
+```
+
+**Role-Based Access Control:**
+- DELETE operations: Admin only
+- POST/PUT operations: Admin, Operator
+- GET operations: All authenticated users
+- Driver-specific data: Filtered by user ID
+
+### Security Best Practices
+
+1. **HTTPS Only** - All API communication over TLS
+2. **Token Expiration** - Short-lived access tokens (1 hour)
+3. **Refresh Tokens** - Secure token renewal without re-authentication
+4. **Password Policy** - Enforced strong passwords
+5. **MFA** - Multi-factor authentication for admin users (recommended)
+6. **Rate Limiting** - Prevent brute force attacks
+7. **Audit Logging** - All authentication events logged to CloudWatch
+8. **CORS** - Strict CORS policy on API Gateway
+
+### Implementation Guide
+
+See `docs/AUTHENTICATION_IMPLEMENTATION.md` for complete implementation details including:
+- SAM template configuration
+- Frontend authentication code
+- Backend token validation
+- Creating admin users
+- Testing authentication
+- Troubleshooting
 
 ## Error Handling
 

@@ -754,37 +754,87 @@ This implementation plan creates a comprehensive serverless vehicle and driver m
     - Verify scheduled tasks run correctly
 
 - [ ] 29. Add security and compliance features and deploy
-  - [ ] 28.1 Add Cognito authentication
-    - Add Cognito User Pool to SAM template
-    - Configure API Gateway with Cognito authorizer
-    - Add role-based access control
+  - [ ] 29.1 Add Cognito User Pool (Backend)
+    - Add Cognito User Pool to SAM template with email authentication
+    - Configure password policy (8+ chars, mixed case, numbers, symbols)
+    - Add custom user attributes for roles (admin, operator, driver, viewer)
+    - Configure token validity (1 hour access, 30 days refresh)
+    - Add Cognito User Pool Client for web application
+    - _Requirements: 9.2_
+    - _See: docs/AUTHENTICATION_IMPLEMENTATION.md_
+
+  - [ ] 29.2 Configure API Gateway Authorizer (Backend)
+    - Add Cognito Authorizer to API Gateway
+    - Protect all endpoints except /health with authorization
+    - Configure authorization scopes
+    - Update Lambda function events with Auth configuration
     - _Requirements: 9.2_
 
-  - [ ] 28.2 Implement data encryption and audit logging
+  - [ ] 29.3 Implement frontend authentication (Frontend)
+    - Create auth.js with AuthService class
+    - Implement sign up, sign in, sign out functions
+    - Add token storage in localStorage
+    - Implement automatic token refresh
+    - Add authentication check on app load
+    - Create login/signup UI forms
+    - _Requirements: 9.2_
+
+  - [ ] 29.4 Update API requests with authentication (Frontend)
+    - Modify FleetApp to include Authorization header
+    - Add token to all API requests
+    - Handle 401 responses with token refresh
+    - Redirect to login on authentication failure
+    - _Requirements: 9.2_
+
+  - [ ] 29.5 Implement role-based access control (Backend)
+    - Extract user claims from API Gateway authorizer
+    - Implement role hierarchy (admin > operator > driver > viewer)
+    - Add permission checks in Lambda functions
+    - Restrict DELETE to admin only
+    - Restrict POST/PUT to admin and operator
+    - Filter data by user role and ID
+    - _Requirements: 9.2_
+
+  - [ ] 29.6 Create initial admin user
+    - Deploy Cognito User Pool
+    - Create admin user via AWS CLI
+    - Set permanent password
+    - Test admin login
+    - _Requirements: 9.2_
+
+  - [ ] 29.7 Implement data encryption and audit logging
     - Implement field-level encryption for sensitive data
     - Create audit logging for all operations
+    - Log authentication events to CloudWatch
     - Add security API endpoints
     - _Requirements: 9.1, 9.3_
 
-  - [ ]* 28.3 Write property test for data encryption
+  - [ ]* 29.8 Write property test for data encryption
     - **Property 34: Data Encryption**
     - **Validates: Requirements 9.1**
 
-  - [ ]* 28.4 Write property test for role-based access control
+  - [ ]* 29.9 Write property test for role-based access control
     - **Property 35: Role-Based Access Control**
     - **Validates: Requirements 9.2**
 
-  - [ ]* 28.5 Write property test for audit logging
+  - [ ]* 29.10 Write property test for audit logging
     - **Property 36: Audit Logging**
     - **Validates: Requirements 9.3**
 
-  - [ ] 28.6 Deploy security features to dev
-    - Deploy Cognito and updated Lambdas with security
-    - Test authentication and authorization
+  - [ ] 29.11 Deploy security features to dev
+    - Deploy Cognito User Pool and API Gateway authorizer
+    - Deploy updated Lambdas with RBAC
+    - Deploy frontend with authentication
+    - Create test users for each role
+    - Test authentication flow end-to-end
+    - Test role-based access control
 
-  - [ ] 28.7 Deploy security features to production
-    - Deploy security features to production
-    - Verify authentication and audit logging work
+  - [ ] 29.12 Deploy security features to production
+    - Deploy Cognito and security features to production
+    - Create production admin user
+    - Verify authentication and authorization work
+    - Test MFA for admin users
+    - Monitor CloudWatch for authentication events
 
 - [ ] 30. Add backup and recovery and deploy
   - [ ] 29.1 Implement backup and recovery

@@ -11,6 +11,7 @@ FLEET manages vehicle fleet operations, driver onboarding and performance tracki
 - **Region**: AWS Ireland (eu-west-1)
 - **Backend**: Python 3.11 on AWS Lambda
 - **API**: AWS API Gateway
+- **Authentication**: AWS Cognito User Pools with JWT tokens
 - **Database**: Aurora Serverless v2 (PostgreSQL) + DynamoDB
 - **Frontend**: Vanilla JavaScript (ES6+) with HTML5 and CSS3
 - **Infrastructure**: AWS SAM (Serverless Application Model)
@@ -23,12 +24,44 @@ FLEET manages vehicle fleet operations, driver onboarding and performance tracki
 - AWS CLI configured with appropriate permissions
 - SAM CLI installed (`brew install aws-sam-cli` on macOS)
 - Python 3.11+
-- AWS account with permissions for Lambda, API Gateway, Aurora, DynamoDB, S3, CloudFront
+- AWS account with permissions for Lambda, API Gateway, Aurora, DynamoDB, S3, CloudFront, Cognito
 
 **Frontend Requirements:**
 - AWS CLI configured
 - S3 bucket access for static hosting
 - CloudFront distribution (optional but recommended)
+
+### Authentication Setup
+
+FLEET uses **AWS Cognito** for authentication. Before using the system, you need to:
+
+1. **Deploy Cognito User Pool** (included in SAM template)
+2. **Create an admin user**
+3. **Configure frontend with Cognito credentials**
+
+See `docs/AUTHENTICATION_IMPLEMENTATION.md` for complete setup instructions.
+
+**Quick Admin User Creation:**
+```bash
+# After deploying backend, create admin user
+USER_POOL_ID=$(aws cloudformation describe-stacks \
+  --stack-name fleet-backend-dev \
+  --query 'Stacks[0].Outputs[?OutputKey==`UserPoolId`].OutputValue' \
+  --output text)
+
+aws cognito-idp admin-create-user \
+  --user-pool-id $USER_POOL_ID \
+  --username admin@fleet.com \
+  --user-attributes Name=email,Value=admin@fleet.com Name=name,Value="Fleet Admin" Name=custom:role,Value=admin \
+  --temporary-password "TempPass123!" \
+  --message-action SUPPRESS
+
+aws cognito-idp admin-set-user-password \
+  --user-pool-id $USER_POOL_ID \
+  --username admin@fleet.com \
+  --password "YourSecurePassword123!" \
+  --permanent
+```
 
 ### Backend Installation & Deployment
 
@@ -413,6 +446,8 @@ The system implements 9 core requirements with comprehensive testing:
 - Aurora Serverless v2 (PostgreSQL) for relational data
 - DynamoDB for GPS time-series data
 - AWS API Gateway for REST API
+- AWS Cognito User Pools for authentication
+- JWT tokens for API authorization
 - boto3 for AWS service integration
 
 **Frontend:**
