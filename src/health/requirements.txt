@@ -1,0 +1,2 @@
+# No external dependencies required for health check
+# Using only Python standard library

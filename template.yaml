@@ -1,0 +1,492 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  FLEET - Fleet Location, Efficiency, and Tracking Technology
+  Minimal foundation template for serverless vehicle and driver management system
+
+Globals:
+  Function:
+    Timeout: 30
+    Runtime: python3.12
+    Environment:
+      Variables:
+        REGION: eu-west-1
+        LOG_LEVEL: INFO
+    Tracing: Active
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - prod
+    Description: Environment name
+  
+  DatabaseUsername:
+    Type: String
+    Default: fleetadmin
+    Description: Database master username
+    
+  RandomSuffix:
+    Type: String
+    Default: "20260106183000"
+    Description: Random suffix for resource names to prevent conflicts
+
+Resources:
+  # API Gateway CloudWatch Log Group
+  ApiGatewayLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/apigateway/fleet-api-${Environment}-${RandomSuffix}"
+      RetentionInDays: 14
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+
+  # Explicit API Gateway with proper stage name
+  FleetApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub "fleet-api-${Environment}-${RandomSuffix}"
+      StageName: !Ref Environment
+      Cors:
+        AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+        AllowOrigin: "'*'"
+      TracingEnabled: true
+      AccessLogSetting:
+        DestinationArn: !GetAtt ApiGatewayLogGroup.Arn
+        Format: '{"requestId":"$context.requestId","ip":"$context.identity.sourceIp","caller":"$context.identity.caller","user":"$context.identity.user","requestTime":"$context.requestTime","httpMethod":"$context.httpMethod","resourcePath":"$context.resourcePath","status":"$context.status","protocol":"$context.protocol","responseLength":"$context.responseLength"}'
+      MethodSettings:
+        - ResourcePath: "/*"
+          HttpMethod: "*"
+          LoggingLevel: INFO
+          DataTraceEnabled: true
+          MetricsEnabled: true
+  # Aurora Serverless v2 Cluster (using Data API - no VPC required)
+  AuroraCluster:
+    Type: AWS::RDS::DBCluster
+    Properties:
+      DBClusterIdentifier: !Sub "fleet-cluster-${Environment}-${RandomSuffix}"
+      Engine: aurora-postgresql
+      EngineVersion: "16.9"
+      DatabaseName: fleet
+      MasterUsername: !Ref DatabaseUsername
+      ManageMasterUserPassword: true
+      ServerlessV2ScalingConfiguration:
+        MinCapacity: 0.5
+        MaxCapacity: 2
+      BackupRetentionPeriod: 7
+      DeletionProtection: false
+      EnableHttpEndpoint: true
+      StorageEncrypted: true
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+
+  # Aurora Serverless v2 Instance
+  AuroraInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: !Sub "fleet-instance-${Environment}-${RandomSuffix}"
+      DBClusterIdentifier: !Ref AuroraCluster
+      DBInstanceClass: db.serverless
+      Engine: aurora-postgresql
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+
+  # Database initialization Lambda function
+  DatabaseInitFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "fleet-db-init-${Environment}-${RandomSuffix}"
+      CodeUri: src/database/
+      Handler: init_handler.lambda_handler
+      Description: Initialize FLEET database schema
+      Timeout: 300
+      Tracing: Active
+      Environment:
+        Variables:
+          DB_CLUSTER_ARN: !Sub "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraCluster}"
+          DB_SECRET_ARN: !GetAtt AuroraCluster.MasterUserSecret.SecretArn
+          DB_NAME: fleet
+      Policies:
+        - AWSXRayDaemonWriteAccess
+        - Statement:
+            - Effect: Allow
+              Action:
+                - rds-data:ExecuteStatement
+                - rds-data:BatchExecuteStatement
+                - rds-data:BeginTransaction
+                - rds-data:CommitTransaction
+                - rds-data:RollbackTransaction
+              Resource: !Sub "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraCluster}"
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+                - secretsmanager:DescribeSecret
+              Resource: !GetAtt AuroraCluster.MasterUserSecret.SecretArn
+
+  # Custom Resource to trigger database initialization
+  DatabaseInitCustomResource:
+    Type: AWS::CloudFormation::CustomResource
+    Properties:
+      ServiceToken: !GetAtt DatabaseInitFunction.Arn
+    DependsOn: 
+      - AuroraInstance
+  # Lambda Layer for shared database utilities
+  # DatabaseUtilsLayer:
+  #   Type: AWS::Serverless::LayerVersion
+  #   Properties:
+  #     LayerName: !Sub "fleet-database-utils-${Environment}"
+  #     Description: Shared database utilities for FLEET system
+  #     ContentUri: src/database/
+  #     CompatibleRuntimes:
+  #       - python3.11
+  #       - python3.12
+  #   Metadata:
+  #     BuildMethod: python3.12
+
+  # Health Check Lambda Function
+  HealthCheckFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "fleet-health-check-${Environment}-${RandomSuffix}"
+      CodeUri: src/health/
+      Handler: handler.lambda_handler
+      Description: Health check endpoint for FLEET system
+      Tracing: Active
+      Environment:
+        Variables:
+          DB_CLUSTER_ARN: !Sub "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraCluster}"
+          DB_SECRET_ARN: !GetAtt AuroraCluster.MasterUserSecret.SecretArn
+          DB_NAME: fleet
+          Environment: !Ref Environment
+      Policies:
+        - AWSXRayDaemonWriteAccess
+      Events:
+        HealthCheck:
+          Type: Api
+          Properties:
+            RestApiId: !Ref FleetApi
+            Path: /health
+            Method: get
+
+  # Vehicle Management Lambda Function
+  VehicleManagementFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "fleet-vehicles-${Environment}-${RandomSuffix}"
+      CodeUri: src/vehicles/
+      Handler: handler.lambda_handler
+      Description: Vehicle management CRUD operations
+      Timeout: 30
+      Tracing: Active
+      Environment:
+        Variables:
+          DB_CLUSTER_ARN: !Sub "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraCluster}"
+          DB_SECRET_ARN: !GetAtt AuroraCluster.MasterUserSecret.SecretArn
+          DB_NAME: fleet
+          Environment: !Ref Environment
+      Policies:
+        - AWSXRayDaemonWriteAccess
+        - Statement:
+            - Effect: Allow
+              Action:
+                - rds-data:ExecuteStatement
+                - rds-data:BatchExecuteStatement
+                - rds-data:BeginTransaction
+                - rds-data:CommitTransaction
+                - rds-data:RollbackTransaction
+              Resource: !Sub "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraCluster}"
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+                - secretsmanager:DescribeSecret
+              Resource: !GetAtt AuroraCluster.MasterUserSecret.SecretArn
+      Events:
+        # Vehicle CRUD operations
+        CreateVehicle:
+          Type: Api
+          Properties:
+            RestApiId: !Ref FleetApi
+            Path: /vehicles
+            Method: post
+        ListVehicles:
+          Type: Api
+          Properties:
+            RestApiId: !Ref FleetApi
+            Path: /vehicles
+            Method: get
+        GetVehicle:
+          Type: Api
+          Properties:
+            RestApiId: !Ref FleetApi
+            Path: /vehicles/{id}
+            Method: get
+        UpdateVehicle:
+          Type: Api
+          Properties:
+            RestApiId: !Ref FleetApi
+            Path: /vehicles/{id}
+            Method: put
+        DeleteVehicle:
+          Type: Api
+          Properties:
+            RestApiId: !Ref FleetApi
+            Path: /vehicles/{id}
+            Method: delete
+        # Service Record operations
+        AddServiceRecord:
+          Type: Api
+          Properties:
+            RestApiId: !Ref FleetApi
+            Path: /vehicles/{id}/service-records
+            Method: post
+        GetServiceHistory:
+          Type: Api
+          Properties:
+            RestApiId: !Ref FleetApi
+            Path: /vehicles/{id}/service-records
+            Method: get
+        GetMaintenanceAlerts:
+          Type: Api
+          Properties:
+            RestApiId: !Ref FleetApi
+            Path: /maintenance-alerts
+            Method: get
+        # Cost Analysis operations
+        GetCostAnalysis:
+          Type: Api
+          Properties:
+            RestApiId: !Ref FleetApi
+            Path: /cost-analysis
+            Method: get
+        GetFleetCostComparison:
+          Type: Api
+          Properties:
+            RestApiId: !Ref FleetApi
+            Path: /fleet-cost-comparison
+            Method: get
+        GetHighCostAlerts:
+          Type: Api
+          Properties:
+            RestApiId: !Ref FleetApi
+            Path: /high-cost-alerts
+            Method: get
+    DependsOn:
+      - DatabaseInitCustomResource
+
+  # Driver Management Lambda Function
+  DriverManagementFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "fleet-drivers-${Environment}-${RandomSuffix}"
+      CodeUri: src/drivers/
+      Handler: handler.lambda_handler
+      Description: Driver management CRUD operations and performance tracking
+      Timeout: 30
+      Tracing: Active
+      Environment:
+        Variables:
+          DB_CLUSTER_ARN: !Sub "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraCluster}"
+          DB_SECRET_ARN: !GetAtt AuroraCluster.MasterUserSecret.SecretArn
+          DB_NAME: fleet
+          Environment: !Ref Environment
+      Policies:
+        - AWSXRayDaemonWriteAccess
+        - Statement:
+            - Effect: Allow
+              Action:
+                - rds-data:ExecuteStatement
+                - rds-data:BatchExecuteStatement
+                - rds-data:BeginTransaction
+                - rds-data:CommitTransaction
+                - rds-data:RollbackTransaction
+              Resource: !Sub "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraCluster}"
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+                - secretsmanager:DescribeSecret
+              Resource: !GetAtt AuroraCluster.MasterUserSecret.SecretArn
+      Events:
+        # Driver CRUD operations
+        CreateDriver:
+          Type: Api
+          Properties:
+            RestApiId: !Ref FleetApi
+            Path: /drivers
+            Method: post
+        ListDrivers:
+          Type: Api
+          Properties:
+            RestApiId: !Ref FleetApi
+            Path: /drivers
+            Method: get
+        GetDriver:
+          Type: Api
+          Properties:
+            RestApiId: !Ref FleetApi
+            Path: /drivers/{id}
+            Method: get
+        UpdateDriver:
+          Type: Api
+          Properties:
+            RestApiId: !Ref FleetApi
+            Path: /drivers/{id}
+            Method: put
+        DeleteDriver:
+          Type: Api
+          Properties:
+            RestApiId: !Ref FleetApi
+            Path: /drivers/{id}
+            Method: delete
+        # Driver Assignment operations
+        GetDriverAssignments:
+          Type: Api
+          Properties:
+            RestApiId: !Ref FleetApi
+            Path: /drivers/{id}/assignments
+            Method: get
+        AssignVehicle:
+          Type: Api
+          Properties:
+            RestApiId: !Ref FleetApi
+            Path: /drivers/{id}/assignments
+            Method: post
+        # Driver Performance operations
+        GetDriverPerformance:
+          Type: Api
+          Properties:
+            RestApiId: !Ref FleetApi
+            Path: /drivers/{id}/performance
+            Method: get
+        RecordPerformance:
+          Type: Api
+          Properties:
+            RestApiId: !Ref FleetApi
+            Path: /drivers/{id}/performance
+            Method: post
+    DependsOn:
+      - DatabaseInitCustomResource
+
+  # CloudWatch Log Groups
+  HealthCheckLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/fleet-health-check-${Environment}-${RandomSuffix}"
+      RetentionInDays: 14
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+
+  VehicleManagementLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/fleet-vehicles-${Environment}-${RandomSuffix}"
+      RetentionInDays: 14
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+
+  DriverManagementLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/fleet-drivers-${Environment}-${RandomSuffix}"
+      RetentionInDays: 14
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+
+  DatabaseInitLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/fleet-db-init-${Environment}-${RandomSuffix}"
+      RetentionInDays: 7
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+
+  # CloudWatch Alarms for Basic Monitoring
+  HealthCheckErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "fleet-health-check-errors-${Environment}-${RandomSuffix}"
+      AlarmDescription: "Health check function errors"
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref HealthCheckFunction
+      TreatMissingData: notBreaching
+
+  ApiGateway4xxAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "fleet-api-4xx-errors-${Environment}-${RandomSuffix}"
+      AlarmDescription: "API Gateway 4xx errors"
+      MetricName: 4XXError
+      Namespace: AWS/ApiGateway
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 10
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: ApiName
+          Value: !Sub "${AWS::StackName}-ServerlessRestApi"
+      TreatMissingData: notBreaching
+
+  ApiGateway5xxAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "fleet-api-5xx-errors-${Environment}-${RandomSuffix}"
+      AlarmDescription: "API Gateway 5xx errors"
+      MetricName: 5XXError
+      Namespace: AWS/ApiGateway
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: ApiName
+          Value: !Sub "${AWS::StackName}-ServerlessRestApi"
+      TreatMissingData: notBreaching
+
+Outputs:
+  FleetApiUrl:
+    Description: "API Gateway endpoint URL for FLEET system"
+    Value: !Sub "https://${FleetApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/"
+    Export:
+      Name: !Sub "${AWS::StackName}-ApiUrl"
+
+  FleetApiId:
+    Description: "API Gateway ID"
+    Value: !Ref FleetApi
+    Export:
+      Name: !Sub "${AWS::StackName}-ApiId"
+
+  HealthCheckFunctionArn:
+    Description: "Health Check Lambda Function ARN"
+    Value: !GetAtt HealthCheckFunction.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-HealthCheckFunctionArn"
+
+  DatabaseClusterArn:
+    Description: "Aurora Serverless v2 Cluster ARN"
+    Value: !Sub "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraCluster}"
+    Export:
+      Name: !Sub "${AWS::StackName}-DatabaseClusterArn"
+
+  DatabaseSecretArn:
+    Description: "Database credentials secret ARN"
+    Value: !GetAtt AuroraCluster.MasterUserSecret.SecretArn
+    Export:
+      Name: !Sub "${AWS::StackName}-DatabaseSecretArn"
+
+  DatabaseName:
+    Description: "Database name"
+    Value: fleet
+    Export:
+      Name: !Sub "${AWS::StackName}-DatabaseName"

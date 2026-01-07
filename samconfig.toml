@@ -1,0 +1,28 @@
+version = 0.1
+
+[default]
+[default.build]
+[default.build.parameters]
+cached = true
+parallel = true
+
+[default.deploy]
+[default.deploy.parameters]
+stack_name = "fleet-backend-dev"
+s3_prefix = "fleet-system"
+region = "eu-west-1"
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "Environment=dev"
+disable_rollback = true
+image_repositories = []
+
+[prod]
+[prod.deploy]
+[prod.deploy.parameters]
+stack_name = "fleet-backend-prod"
+s3_prefix = "fleet-system"
+region = "eu-west-1"
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "Environment=prod"
+disable_rollback = true
+image_repositories = []

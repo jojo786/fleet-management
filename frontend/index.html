@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FLEET - Vehicle Management</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🚗 FLEET - Vehicle Management</h1>
+            <p>Fleet Location, Efficiency, and Tracking Technology</p>
+            
+            <!-- Main Navigation -->
+            <nav class="main-nav">
+                <button id="vehiclesTab" class="nav-tab active">🚗 Vehicles</button>
+                <button id="driversTab" class="nav-tab">👤 Drivers</button>
+            </nav>
+        </header>
+
+        <main>
+            <!-- Vehicles Tab Content -->
+            <div id="vehiclesContent" class="tab-content active">
+                <!-- Add Vehicle Form -->
+                <section class="add-vehicle-section">
+                <h2>Add New Vehicle</h2>
+                <form id="vehicleForm">
+                    <div class="form-group">
+                        <label for="make">Make:</label>
+                        <input type="text" id="make" name="make" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="model">Model:</label>
+                        <input type="text" id="model" name="model" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="year">Year:</label>
+                        <input type="number" id="year" name="year" min="1900" max="2030" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="registration">Registration:</label>
+                        <input type="text" id="registration" name="registration" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="vin">VIN (Optional):</label>
+                        <input type="text" id="vin" name="vin">
+                    </div>
+                    
+                    <button type="submit">Add Vehicle</button>
+                </form>
+            </section>
+
+            <!-- Vehicle List -->
+            <section class="vehicle-list-section">
+                <h2>Vehicle Fleet</h2>
+                <div class="controls">
+                    <button id="refreshBtn">🔄 Refresh</button>
+                    <span id="vehicleCount">Loading...</span>
+                </div>
+                <div id="vehicleList" class="vehicle-grid">
+                    <!-- Vehicles will be loaded here -->
+                </div>
+            </section>
+
+            <!-- Service Records Section -->
+            <section class="service-records-section">
+                <h2>Service Records</h2>
+                
+                <!-- Add Service Record Form -->
+                <div class="service-form-container" id="serviceFormContainer" style="display: none;">
+                    <h3>Add Service Record</h3>
+                    <form id="serviceRecordForm">
+                        <input type="hidden" id="serviceVehicleId" name="vehicleId">
+                        
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="maintenanceType">Maintenance Type:</label>
+                                <select id="maintenanceType" name="maintenance_type_id" required>
+                                    <option value="">Select maintenance type...</option>
+                                    <option value="1">Oil Change</option>
+                                    <option value="2">Brake Service</option>
+                                    <option value="3">Tire Replacement</option>
+                                    <option value="4">Engine Repair</option>
+                                    <option value="5">Transmission Service</option>
+                                    <option value="6">Accident Repair</option>
+                                    <option value="7">General Maintenance</option>
+                                </select>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="serviceDate">Service Date:</label>
+                                <input type="date" id="serviceDate" name="service_date" required>
+                            </div>
+                        </div>
+                        
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="serviceCost">Cost (R):</label>
+                                <input type="number" id="serviceCost" name="cost" min="0" step="0.01" required>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="mileage">Mileage (km):</label>
+                                <input type="number" id="mileage" name="mileage" min="0">
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="serviceProvider">Service Provider:</label>
+                            <input type="text" id="serviceProvider" name="service_provider" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="serviceDescription">Description:</label>
+                            <textarea id="serviceDescription" name="description" rows="3" required></textarea>
+                        </div>
+                        
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="nextServiceDue">Next Service Due:</label>
+                                <input type="date" id="nextServiceDue" name="next_service_due">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>
+                                    <input type="checkbox" id="isWarranty" name="is_warranty">
+                                    Warranty Service
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="serviceNotes">Notes:</label>
+                            <textarea id="serviceNotes" name="notes" rows="2"></textarea>
+                        </div>
+                        
+                        <div class="form-actions">
+                            <button type="submit">Add Service Record</button>
+                            <button type="button" id="cancelServiceForm">Cancel</button>
+                        </div>
+                    </form>
+                </div>
+                
+                <!-- Service History Display -->
+                <div class="service-history-container" id="serviceHistoryContainer" style="display: none;">
+                    <h3 id="serviceHistoryTitle">Service History</h3>
+                    <div class="service-history-controls">
+                        <button id="closeServiceHistory">← Back to Fleet</button>
+                        <button id="addServiceRecordBtn">+ Add Service Record</button>
+                    </div>
+                    <div id="serviceHistoryList" class="service-history-list">
+                        <!-- Service records will be loaded here -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- Maintenance Alerts Section -->
+            <section class="maintenance-alerts-section">
+                <h2>Maintenance Alerts</h2>
+                <div class="controls">
+                    <button id="refreshAlertsBtn">🔄 Refresh Alerts</button>
+                    <span id="alertCount">Loading...</span>
+                </div>
+                <div id="maintenanceAlerts" class="alerts-grid">
+                    <!-- Maintenance alerts will be loaded here -->
+                </div>
+            </section>
+
+            <!-- Cost Analysis Section -->
+            <section class="cost-analysis-section">
+                <h2>Cost Analysis & Fleet Comparison</h2>
+                
+                <!-- Cost Analysis Navigation Tabs -->
+                <div class="cost-analysis-tabs">
+                    <button id="costAnalysisTab" class="cost-tab active">📊 Cost Analysis</button>
+                    <button id="fleetComparisonTab" class="cost-tab">🚗 Fleet Comparison</button>
+                    <button id="highCostAlertsTab" class="cost-tab">⚠️ High Cost Alerts</button>
+                </div>
+
+                <!-- Cost Analysis Content -->
+                <div id="costAnalysisSection" class="cost-tab-content">
+                    <div class="controls">
+                        <button id="refreshCostAnalysisBtn">🔄 Refresh Analysis</button>
+                    </div>
+                    <div id="costAnalysisContent" class="cost-analysis-content">
+                        <!-- Cost analysis data will be loaded here -->
+                    </div>
+                </div>
+
+                <!-- Fleet Comparison Content -->
+                <div id="fleetComparisonSection" class="cost-tab-content" style="display: none;">
+                    <div class="controls">
+                        <button id="refreshFleetComparisonBtn">🔄 Refresh Comparison</button>
+                    </div>
+                    <div id="fleetComparisonContent" class="fleet-comparison-content">
+                        <!-- Fleet comparison data will be loaded here -->
+                    </div>
+                </div>
+
+                <!-- High Cost Alerts Content -->
+                <div id="highCostAlertsSection" class="cost-tab-content" style="display: none;">
+                    <div class="controls">
+                        <button id="refreshHighCostAlertsBtn">🔄 Refresh Alerts</button>
+                    </div>
+                    <div id="highCostAlertsContent" class="high-cost-alerts-content">
+                        <!-- High cost alerts will be loaded here -->
+                    </div>
+                </div>
+            </section>
+            </div>
+
+            <!-- Drivers Tab Content -->
+            <div id="driversContent" class="tab-content">
+                <!-- Add Driver Form -->
+                <section class="add-driver-section">
+                    <h2>Add New Driver</h2>
+                    <form id="driverForm">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="firstName">First Name:</label>
+                                <input type="text" id="firstName" name="first_name" required>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="lastName">Last Name:</label>
+                                <input type="text" id="lastName" name="last_name" required>
+                            </div>
+                        </div>
+                        
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="idNumber">ID Number:</label>
+                                <input type="text" id="idNumber" name="id_number" required>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="email">Email:</label>
+                                <input type="email" id="email" name="email">
+                            </div>
+                        </div>
+                        
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="phone">Phone:</label>
+                                <input type="tel" id="phone" name="phone" required>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="licenseNumber">License Number:</label>
+                                <input type="text" id="licenseNumber" name="license_number" required>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="licenseExpiryDate">License Expiry Date:</label>
+                            <input type="date" id="licenseExpiryDate" name="license_expiry_date" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Address:</label>
+                            <div class="address-fields">
+                                <input type="text" id="addressStreet" name="address_street" placeholder="Street Address" required>
+                                <div class="form-row">
+                                    <input type="text" id="addressCity" name="address_city" placeholder="City" required>
+                                    <input type="text" id="addressProvince" name="address_province" placeholder="Province">
+                                    <input type="text" id="addressPostalCode" name="address_postal_code" placeholder="Postal Code">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Emergency Contact:</label>
+                            <div class="emergency-contact-fields">
+                                <input type="text" id="emergencyName" name="emergency_name" placeholder="Contact Name">
+                                <div class="form-row">
+                                    <input type="tel" id="emergencyPhone" name="emergency_phone" placeholder="Contact Phone">
+                                    <input type="text" id="emergencyRelationship" name="emergency_relationship" placeholder="Relationship">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <button type="submit">Add Driver</button>
+                    </form>
+                </section>
+
+                <!-- Driver List -->
+                <section class="driver-list-section">
+                    <h2>Driver Fleet</h2>
+                    <div class="controls">
+                        <button id="refreshDriversBtn">🔄 Refresh</button>
+                        <span id="driverCount">Loading...</span>
+                    </div>
+                    <div id="driverList" class="driver-grid">
+                        <!-- Drivers will be loaded here -->
+                    </div>
+                </section>
+
+                <!-- Driver Details Section -->
+                <section class="driver-details-section" id="driverDetailsSection" style="display: none;">
+                    <h2>Driver Details</h2>
+                    <div class="driver-details-controls">
+                        <button id="closeDriverDetails">← Back to Drivers</button>
+                        <button id="editDriverBtn">✏️ Edit Driver</button>
+                        <button id="assignVehicleBtn">🚗 Assign Vehicle</button>
+                    </div>
+                    <div id="driverDetailsContent" class="driver-details-content">
+                        <!-- Driver details will be loaded here -->
+                    </div>
+                    
+                    <!-- Current Assignment Section -->
+                    <div id="currentAssignmentSection" class="current-assignment-section">
+                        <h3>Current Vehicle Assignment</h3>
+                        <div id="currentAssignmentContent">
+                            <!-- Current assignment will be loaded here -->
+                        </div>
+                    </div>
+                    
+                    <!-- Assignment History Section -->
+                    <div id="assignmentHistorySection" class="assignment-history-section">
+                        <h3>Assignment History</h3>
+                        <div id="assignmentHistoryContent">
+                            <!-- Assignment history will be loaded here -->
+                        </div>
+                    </div>
+                    
+                    <!-- Performance Records Section -->
+                    <div id="performanceRecordsSection" class="performance-records-section">
+                        <h3>Performance Records</h3>
+                        <div class="performance-controls">
+                            <button id="addPerformanceRecordBtn">+ Add Performance Record</button>
+                        </div>
+                        <div id="performanceRecordsContent">
+                            <!-- Performance records will be loaded here -->
+                        </div>
+                        <div id="performanceSummaryContent" class="performance-summary">
+                            <!-- Performance summary will be loaded here -->
+                        </div>
+                    </div>
+                </section>
+                
+                <!-- Add Performance Record Form -->
+                <section class="add-performance-section" id="addPerformanceSection" style="display: none;">
+                    <h2>Add Performance Record</h2>
+                    <form id="addPerformanceForm">
+                        <input type="hidden" id="performanceDriverId" name="driver_id">
+                        <input type="hidden" id="performanceVehicleId" name="vehicle_id">
+                        
+                        <div class="form-group">
+                            <label for="weekStartDate">Week Start Date (Monday):</label>
+                            <input type="date" id="weekStartDate" name="week_start_date" required>
+                        </div>
+                        
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="cardEarnings">Card Earnings (R):</label>
+                                <input type="number" id="cardEarnings" name="card_earnings" min="0" step="0.01" required>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="cashTripsValue">Cash Trips Value (R):</label>
+                                <input type="number" id="cashTripsValue" name="cash_trips_value" min="0" step="0.01" required>
+                            </div>
+                        </div>
+                        
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="totalTrips">Total Trips:</label>
+                                <input type="number" id="totalTrips" name="total_trips" min="0" required>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="cashTripsCount">Cash Trips Count:</label>
+                                <input type="number" id="cashTripsCount" name="cash_trips_count" min="0" required>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="performanceNotes">Notes:</label>
+                            <textarea id="performanceNotes" name="notes" rows="3" placeholder="Optional notes about this week's performance"></textarea>
+                        </div>
+                        
+                        <div class="form-actions">
+                            <button type="submit">Add Performance Record</button>
+                            <button type="button" id="cancelAddPerformance">Cancel</button>
+                        </div>
+                    </form>
+                </section>
+                
+                <!-- Vehicle Assignment Form -->
+                <section class="assign-vehicle-section" id="assignVehicleSection" style="display: none;">
+                    <h2>Assign Vehicle to Driver</h2>
+                    <form id="assignVehicleForm">
+                        <input type="hidden" id="assignDriverId" name="driver_id">
+                        
+                        <div class="form-group">
+                            <label for="assignVehicleSelect">Select Vehicle:</label>
+                            <select id="assignVehicleSelect" name="vehicle_id" required>
+                                <option value="">Select an available vehicle...</option>
+                                <!-- Available vehicles will be loaded here -->
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="assignmentStartDate">Assignment Start Date:</label>
+                            <input type="date" id="assignmentStartDate" name="assignment_start_date" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="assignmentNotes">Notes:</label>
+                            <textarea id="assignmentNotes" name="notes" rows="3" placeholder="Optional notes about this assignment"></textarea>
+                        </div>
+                        
+                        <div class="form-actions">
+                            <button type="submit">Assign Vehicle</button>
+                            <button type="button" id="cancelAssignVehicle">Cancel</button>
+                        </div>
+                    </form>
+                </section>
+
+                <!-- Edit Driver Form -->
+                <section class="edit-driver-section" id="editDriverSection" style="display: none;">
+                    <h2>Edit Driver</h2>
+                    <form id="editDriverForm">
+                        <input type="hidden" id="editDriverId" name="driver_id">
+                        
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="editFirstName">First Name:</label>
+                                <input type="text" id="editFirstName" name="first_name" required>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="editLastName">Last Name:</label>
+                                <input type="text" id="editLastName" name="last_name" required>
+                            </div>
+                        </div>
+                        
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="editEmail">Email:</label>
+                                <input type="email" id="editEmail" name="email">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="editPhone">Phone:</label>
+                                <input type="tel" id="editPhone" name="phone" required>
+                            </div>
+                        </div>
+                        
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="editLicenseNumber">License Number:</label>
+                                <input type="text" id="editLicenseNumber" name="license_number" required>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="editLicenseExpiryDate">License Expiry Date:</label>
+                                <input type="date" id="editLicenseExpiryDate" name="license_expiry_date" required>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="editStatus">Status:</label>
+                            <select id="editStatus" name="status" required>
+                                <option value="active">Active</option>
+                                <option value="inactive">Inactive</option>
+                                <option value="suspended">Suspended</option>
+                                <option value="terminated">Terminated</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-actions">
+                            <button type="submit">Update Driver</button>
+                            <button type="button" id="cancelEditDriver">Cancel</button>
+                        </div>
+                    </form>
+                </section>
+            </div>
+        </main>
+
+        <!-- Status Messages -->
+        <div id="statusMessage" class="status-message hidden"></div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
