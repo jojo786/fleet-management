@@ -1,6 +1,6 @@
 # FLEET - Fleet Location, Efficiency, and Tracking Technology
 
-A comprehensive serverless vehicle and driver management system for Uber rental operations built on AWS.
+A comprehensive serverless vehicle and driver management system for Uber rental operations built on AWS. Built using [Kiro](https://kiro.dev/)
 
 ## Overview
 
