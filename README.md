@@ -12,7 +12,7 @@ FLEET manages vehicle fleet operations, driver onboarding and performance tracki
 - **Backend**: Python 3.11 on AWS Lambda
 - **API**: AWS API Gateway
 - **Database**: Aurora Serverless v2 (PostgreSQL) + DynamoDB
-- **Frontend**: Vue.js 3 with TypeScript (coming soon)
+- **Frontend**: Vanilla JavaScript (ES6+) with HTML5 and CSS3
 - **Infrastructure**: AWS SAM (Serverless Application Model)
 
 ## Quick Start
@@ -416,8 +416,9 @@ The system implements 9 core requirements with comprehensive testing:
 - boto3 for AWS service integration
 
 **Frontend:**
-- HTML5, CSS3, JavaScript (ES6+)
-- Vue.js 3 (planned migration from vanilla JS)
+- Vanilla JavaScript (ES6+) with class-based architecture
+- HTML5 and CSS3 for UI
+- No build tools required - pure static files
 - S3 for static hosting
 - CloudFront for CDN and caching
 

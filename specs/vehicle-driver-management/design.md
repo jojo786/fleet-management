@@ -4,7 +4,7 @@
 
 Fleet - Fleet Location, Efficiency, and Tracking Technology - is a vehicle and driver management system is a comprehensive web-based application designed to manage Uber rental fleet operations. The system integrates vehicle tracking, driver performance monitoring, financial settlements, maintenance tracking, and insurance management into a unified platform.
 
-The system follows a modern serverless architecture using AWS services deployed in the Ireland region (eu-west-1) with a Python Lambda backend, Vue.js frontend, and serverless database. It integrates with external services including the Netstar GPS API for vehicle tracking and supports both automated and manual data entry workflows.
+The system follows a modern serverless architecture using AWS services deployed in the Ireland region (eu-west-1) with a Python Lambda backend, vanilla JavaScript frontend, and serverless database. It integrates with external services including the Netstar GPS API for vehicle tracking and supports both automated and manual data entry workflows.
 
 ## Architecture
 
@@ -13,7 +13,7 @@ The system follows a modern serverless architecture using AWS services deployed 
 ```mermaid
 graph TB
     subgraph "Frontend Layer"
-        UI[Vue.js Dashboard]
+        UI[Vanilla JavaScript App]
         Mobile[Mobile Web Interface]
     end
     
@@ -78,8 +78,8 @@ graph TB
 ### Technology Stack
 
 - **Region**: AWS Ireland (eu-west-1) for all services
-- **Frontend**: Vue.js 3 with TypeScript, Pinia for state management, Vue Router
-- **Deployment**: AWS Amplify for frontend hosting and CI/CD
+- **Frontend**: Vanilla JavaScript (ES6+) with class-based architecture, HTML5, CSS3
+- **Deployment**: S3 for static hosting, CloudFront for CDN
 - **API Layer**: AWS API Gateway with Lambda integration
 - **Backend**: Python 3.11 on AWS Lambda with boto3 for AWS service integration
 - **Authentication**: AWS Cognito for user management and JWT tokens
